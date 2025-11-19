@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, autoUpdater, dialog } from 'electron';
 import path from 'path';
 import squirrelStartup from 'electron-squirrel-startup';
 import { Round } from '../shared/round';
@@ -7,6 +7,46 @@ import { Round } from '../shared/round';
 if (squirrelStartup) {
     app.quit();
 }
+
+
+const setupAutoUpdater = () => {
+    if (app.isPackaged) {
+        const server = 'https://your-update-server.com/updates';
+        // For Squirrel.Windows, the URL should point to the folder containing RELEASES
+        const url = `${server}`;
+
+        try {
+            autoUpdater.setFeedURL({ url });
+
+            autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+                const dialogOpts = {
+                    type: 'info' as const,
+                    buttons: ['Restart', 'Later'],
+                    title: 'Application Update',
+                    message: process.platform === 'win32' ? releaseNotes : releaseName,
+                    detail: 'A new version has been downloaded. Restart the application to apply the updates.'
+                };
+
+                dialog.showMessageBox(dialogOpts).then((returnValue) => {
+                    if (returnValue.response === 0) autoUpdater.quitAndInstall();
+                });
+            });
+
+            autoUpdater.on('error', (message) => {
+                console.error('There was a problem updating the application');
+                console.error(message);
+            });
+
+            // Check for updates immediately and then every 60 minutes
+            autoUpdater.checkForUpdates();
+            setInterval(() => {
+                autoUpdater.checkForUpdates();
+            }, 5 * 60 * 1000);
+        } catch (error) {
+            console.error('Failed to setup auto updater:', error);
+        }
+    }
+};
 
 const createWindow = () => {
     // Create the browser window.
@@ -37,7 +77,10 @@ const createWindow = () => {
     })
 };
 
-app.on('ready', createWindow);
+app.on('ready', () => {
+    createWindow();
+    setupAutoUpdater();
+});
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
